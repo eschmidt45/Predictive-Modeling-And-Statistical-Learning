@@ -1,0 +1,282 @@
+---
+title: "HW 1 - 521"
+author: "Emma Schmidt"
+date: "9/7/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(GGally)
+```
+
+# Question 1: Basics of SVD
+
+Generate a random matrix M of size n×n for n ∈ {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048}. And then plot the time taken to (i) to generate this matrix, and (ii) to compute the SVD of the matrix as n increases. Note that you need to plot two figures. You may want
+to use Sys.time for the same. DO NOT report the SVD values, just plot the time as a
+function of n. Do you see some scaling with n? Justify your observations. It may be
+useful to plot t.
+
+i) Time to generate matrix
+```{r}
+set.seed(45)
+
+n <- c(2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048)
+v <- c()
+
+for(i in seq_along(n)){
+  start <- Sys.time()
+  M <- matrix(rnorm((n[i])^2), nrow = n[i], ncol = n[i])
+  end <- Sys.time()
+  v[i] <- end - start
+}
+
+plot(n, v, type = "l", xlab = "n", ylab = "Seconds", 
+     main = "Matrix Generation Time vs. Matrix Size")
+```
+As n increases the time to generate the matrix roughly increases exponentially. 
+
+ii) Time to compute SVD
+```{r}
+set.seed(45)
+
+n <- c(2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048)
+v <- c()
+
+for(i in seq_along(n)){
+  start <- Sys.time()
+  M <- matrix(rnorm((n[i])^2), nrow = n[i], ncol = n[i])
+  svd(M)
+  end <- Sys.time()
+  v[i] <- end - start
+}
+
+plot(log2(n), log2(v), type = "l", xlab = "n", ylab = "Seconds", 
+     main = "SVD Computation Time vs. Matrix Size (log-log scale)")
+```
+Consistent with our findings above, as n increases, the time to execute SVD exponentially increases.
+
+# Question 2: Power Method
+
+2.1 First Eigenvector: Write code that implements the full procedure of the power method to find the largest eigenvalue and its corresponding eigenvector. Use your code to find the largest eigenvalue of the following matrix. 
+
+     1   2   3
+A =  2  -1   4
+     3   4  -5
+     
+Compare results with those provided by eigen()
+
+```{r}
+set.seed(45)
+
+power_method <- function(matrix) {
+  data <- rnorm(nrow(matrix))
+  w <- data
+  sk_new <- 1
+  sk_old <- 0
+  vector <- matrix %*% w
+  while(abs(sk_new - sk_old) > .00001) {
+    sk_new <- vector[which.max(abs(vector))]
+    sk_old <- sk_new
+    w_new <- (matrix %*% w)/sk_new
+    w <- w_new
+    vector <- matrix %*% w
+    sk_new <- vector[which.max(abs(vector))]
+  }
+  return(c(w_new, sk_new))
+}
+
+A <- matrix(c(1, 2, 3, 2, -1, 4, 3, 4, -5), ncol = 3, nrow = 3)
+power_method(A)
+eigen(A) 
+```
+
+2.2 Deflation and Power Method: 
+
+     5   1   0
+B =  1   4   0
+     0   0   1
+
+a) Apply your power method on matrix B to get an approximation of the first eigenvector and eigenvalue
+```{r}
+set.seed(45)
+
+B <- matrix(c(5, 1, 0, 1, 4, 0, 0, 0, 1), 3, 3)
+power_method(B)
+eigen(B)
+```
+b) Deflate matrix B and apply the power method on the residual matrix B1 to obtain the second eigenvalue and eigenvector
+```{r}
+set.seed(45)
+
+deflation <- function(matrix) {
+  w_new <- power_method(matrix)[1:nrow(matrix)]
+  sk_new <- power_method(matrix)[nrow(matrix)+1]
+  deflation_matrix <- matrix - (sk_new * w_new %*% t(w_new))
+  deflation_matrix
+}
+
+power_method(deflation(B))
+eigen(deflation(B))
+```
+
+c) Deflate the matrix B1 again and apply the power method to obtain the third eigenvalue and eigenvector
+```{r}
+set.seed(45)
+
+power_method(deflation(deflation(B)))
+eigen(deflation(deflation(B)))
+```
+
+
+# Question 3: Principle Component Analysis
+
+For this question use the USArrests dataset
+
+a) Use apply() function to compute the mean and variance of all four columns
+```{r}
+apply(USArrests, 2, mean)
+apply(USArrests, 2, var)
+apply(USArrests, 2, sd)
+```
+
+b) Plot a histogram for each of the four columns
+```{r}
+hist(USArrests$Murder, xlab = "Murder", main = "Histogram of US Murders")
+hist(USArrests$Assault, xlab = "Assault", main = "Histogram of US Assaults")
+hist(USArrests$UrbanPop, xlab = "Urban Population", main = "Histogram of US Urban Population")
+hist(USArrests$Rape, xlab = "Rape", main = "Histogram of US Rapes")
+```
+
+c) Explore and plot any correlations between the four columns
+```{r}
+ggpairs(USArrests, progress = F)
+```
+Assault and murder show a strong, positive correlation. Rape vs murder and rape vs assault both show moderate positive correlation. Urban population looks to have some positive correlation with rape, but less correlation with both murder and assault. 
+
+d) Use prcomp() function to perform principle component analysis. Make sure you standardize the data matrix. Print a summary at the end
+```{r}
+arrests_pca <- prcomp(USArrests, scale = TRUE)
+summary(arrests_pca)
+```
+
+e) Obtain the principal vectors and store them in a matrix, include row and column names. Display first three loadings
+```{r}
+loadings <- arrests_pca$rotation
+loadings[,1:3]
+```
+
+f) Obtain principle components and store them in a matrix, include row and column names. Display first three PCs
+```{r}
+scores <- arrests_pca$x
+scores[,1:3]
+```
+
+g) Obtain the eigenvalues and store them as a vector. Display the entire vector, and compute their sum
+```{r}
+eigenvalues <- arrests_pca$sd^2
+e_vector <- c(eigenvalues)
+e_vector
+sum(e_vector)
+```
+
+h) Creat a scree-plot of the eigenvalues
+```{r}
+ggplot() + geom_point(aes(x = 1:length(eigenvalues), y=eigenvalues/sum(eigenvalues))) +
+labs(x = "Component Number", y = "Eigenvalues") + geom_line(aes(x = 1:length(eigenvalues), y=eigenvalues/sum(eigenvalues)))
+```
+In scree plots the elbow is of interest. The elbow appears to occur roughly at component 3. We can interpret this as the place where most of the variance has been explained, and further components don't offer a ton of significance. 
+
+i) Create a scatterplot based on the 1st and 2nd PCs. Which state stands out? How do you read/interpret this chart?
+```{r}
+ggplot() + geom_point(aes(x = scores[, 1], y=scores[, 2])) +
+geom_text(aes(x = scores[, 1], y=scores[, 2], label = rownames(USArrests))) +
+labs(x = "PC1", y = "PC2")
+```
+
+Florida and Nevada and California are all states that stand out to me. Florida and Nevada are on the PC1 extreme, and California appears to be an extreme for both PC1 and PC2. Based on the loadings, it looks like murder, rape, assault, and urban population all contribute to a negative PC1. It makes sense to me that Florida, Nevada, and California are heavily negative because they all have popular urban vacation destinations, and people tend to drink alcohol at these locations, which I believe may be a contributing factor to poor decision making and thus the negative PC1 reading. The PC2 loading shows that urban population would push a state in the negative direction, so it makes sense that California is very negative, as LA is one of the biggest urban areas in the United States.  
+
+j) Create the same scaterplot, but color states according to the variable UrbanPop
+```{r}
+ggplot() + geom_point(aes(x = scores[, 1], y=scores[, 2])) +
+geom_text(aes(x = scores[, 1], y=scores[, 2], label = rownames(USArrests), color = USArrests$UrbanPop)) + labs(x = "PC1", y = "PC2", color = "Urban Population")
+
+```
+
+k) Create a scatterplot based on the 1st and 3rd PC
+```{r}
+ggplot() + geom_point(aes(x = scores[, 1], y=scores[, 3])) +
+geom_text(aes(x = scores[, 1], y=scores[, 3], label = rownames(USArrests))) +
+labs(x = "PC1", y = "PC3")
+```
+The PC1 vs PC2 plot had a lot of variation across both PC's. In the PC1 vs PC3 plot, there is a lot less variation in the PC3 component. All but four of the state have a PC3 value that lies between -1, and 1. That was my biggest takeaway in terms of visual difference between the two plots.
+
+# Question 4: K-Means and PCA
+
+In this problem, you will generate simulated data, and then perform PCA and K-means clustering on the data
+
+a) Generate a simulated dataset with 20 observations in each of three classes (i.e. 60 observations total), and 50 variables
+```{r}
+set.seed(45)
+
+data <- rbind(matrix(rnorm(20*50, mean = .42), nrow = 20),
+matrix(rnorm(20*50, mean=1.10), nrow = 20),
+matrix(rnorm(20*50, mean=1.45), nrow = 20))
+```
+
+b) Perform PCA on the 60 observations and plot the first two principal component score vectors. Use a different color to indicate the observations in each of the three classes
+```{r}
+pca_data <- prcomp(data)
+data_scores <- pca_data$x
+plot(data_scores[,1:2], col=c(rep(1,20), rep(2,20), rep(3,20)))
+```
+
+c) Perform K-means clustering of the observations with K = 3. How weel do the clusters that you obtained in K-means clustering compare to the true labels?
+```{r}
+set.seed(45)
+
+kmean_3 <- kmeans(data, 3)
+true <- c(rep(1,20), rep(2,20), rep(3,20))
+table(kmean_3$cluster, true)
+```
+The first true class is executed well, but the second one is jumbled into all three clusters. The final true class is is split between two of the clusters
+
+d) Perform K-means clustering with K = 2. Describe your results
+```{r}
+set.seed(45)
+
+kmean_2 <- kmeans(data, 2)
+true <- c(rep(1,20), rep(2,20), rep(3,20))
+table(kmean_2$cluster, true)
+```
+It appears that the observations were fairly well classified
+
+e) Perform K-means clustering with K = 4. Describe your results
+```{r}
+set.seed(45)
+
+kmean_4 <- kmeans(data, 4)
+true <- c(rep(1,20), rep(2,20), rep(3,20))
+table(kmean_4$cluster, true)
+```
+With four clusters we do see some misclassification. Three of our true groups are split between two clusters, but one of our true groups gets split into three separate clusters. 
+
+f) Perform K-means clustering with K = 3 on the first two principal component score vectors, rather than on the raw data
+```{r}
+set.seed(45)
+
+kmean_3sc <- kmeans(data_scores, 3)
+true <- c(rep(1,20), rep(2,20), rep(3,20))
+table(kmean_3sc$cluster, true)
+```
+As we saw in a previous case one of the true groups is successfully clustered, while the others have some mix ups
+
+g) Using the scale() function, perform K-means clustering with K = 3 on the data after scaling each variable to have a standard deviation of one
+```{r}
+set.seed(45)
+
+km3_scale <- kmeans(scale(data), 3)
+true <- c(rep(1,20), rep(2,20), rep(3,20))
+table(km3_scale$cluster, true)
+```
+Again with the scaling we see only one of the true groups get correctly clustered. The results are very similar to that of b)
